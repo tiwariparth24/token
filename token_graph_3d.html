@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Token Counter & Semantic Graph</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #0b0f19;
+            color: #e2e8f0;
+            overflow-x: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        #canvas3d {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.78);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+        .glow-cyan {
+            text-shadow: 0 0 12px rgba(6, 182, 212, 0.7);
+        }
+        .glow-purple {
+            text-shadow: 0 0 12px rgba(168, 85, 247, 0.7);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen relative select-none">
+
+    <!-- 3D WebGL Canvas -->
+    <div id="canvas-container" class="absolute inset-0">
+        <canvas id="canvas3d"></canvas>
+    </div>
+
+    <!-- Top Navigation / Stats Bar -->
+    <header class="absolute top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-4 pointer-events-none">
+        <div class="glass-panel px-5 py-3 rounded-2xl flex items-center gap-3 pointer-events-auto shadow-2xl">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30">
+                <i class="fa-solid fa-cube text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-bold text-white tracking-wide flex items-center gap-2">
+                    Token Counter <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-medium">3D Graph</span>
+                </h1>
+                <p class="text-xs text-gray-400">Static vs Contextual Logic Mapping</p>
+            </div>
+        </div>
+
+        <!-- Quick Summary Badges -->
+        <div class="glass-panel px-5 py-2.5 rounded-2xl flex items-center gap-6 pointer-events-auto shadow-2xl text-xs">
+            <div class="text-center">
+                <span class="text-gray-400 block text-[10px] uppercase tracking-wider">Total Words</span>
+                <span class="font-bold text-base text-white">13</span>
+            </div>
+            <div class="w-px h-6 bg-gray-700"></div>
+            <div class="text-center">
+                <span class="text-gray-400 block text-[10px] uppercase tracking-wider">Unique Tokens</span>
+                <span class="font-bold text-base text-cyan-400">10</span>
+            </div>
+            <div class="w-px h-6 bg-gray-700"></div>
+            <div class="text-center">
+                <span class="text-gray-400 block text-[10px] uppercase tracking-wider">In-Vocabulary</span>
+                <span class="font-bold text-base text-emerald-400">4 <span class="text-[10px] font-normal text-gray-400">(30.8%)</span></span>
+            </div>
+            <div class="w-px h-6 bg-gray-700"></div>
+            <div class="text-center">
+                <span class="text-gray-400 block text-[10px] uppercase tracking-wider">Out-Of-Vocab</span>
+                <span class="font-bold text-base text-rose-400">9</span>
+            </div>
+        </div>
+
+        <!-- Logic Mode Switcher -->
+        <div class="glass-panel p-1.5 rounded-2xl flex items-center gap-1 pointer-events-auto shadow-2xl">
+            <button id="btn-static" onclick="setMode('static')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 bg-cyan-500 text-white shadow-md shadow-cyan-500/30 flex items-center gap-2">
+                <i class="fa-solid fa-shapes"></i> Static Logic
+            </button>
+            <button id="btn-contextual" onclick="setMode('contextual')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 text-gray-400 hover:text-white flex items-center gap-2">
+                <i class="fa-solid fa-brain"></i> Contextual Logic
+            </button>
+            <button id="btn-dual" onclick="setMode('dual')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 text-gray-400 hover:text-white flex items-center gap-2">
+                <i class="fa-solid fa-route"></i> Shift Vector (Dual)
+            </button>
+        </div>
+    </header>
+
+    <!-- Floating Left Panel: Token Frequency & Metrics -->
+    <aside class="absolute top-24 left-4 bottom-6 w-80 glass-panel rounded-2xl flex flex-col p-4 z-20 shadow-2xl">
+        <div class="flex items-center justify-between pb-3 border-b border-gray-700/60">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-chart-simple text-cyan-400 text-sm"></i>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-gray-200">Token Frequencies</h2>
+            </div>
+            <span class="text-[11px] text-gray-400 bg-gray-800/80 px-2 py-0.5 rounded-md">10 items</span>
+        </div>
+
+        <!-- Search Input -->
+        <div class="mt-3 relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-gray-500"></i>
+            <input type="text" id="token-search" oninput="filterTokens(this.value)" placeholder="Search tokens..." 
+                class="w-full bg-gray-900/70 border border-gray-700/60 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition-colors">
+        </div>
+
+        <!-- Filter Pills -->
+        <div class="flex gap-1.5 mt-2.5 text-[10px]">
+            <button onclick="setFilter('all')" id="filter-all" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-medium">All (10)</button>
+            <button onclick="setFilter('invocab')" id="filter-invocab" class="px-2.5 py-1 rounded-lg bg-gray-800 text-gray-400 hover:text-gray-200 font-medium">In-Vocab</button>
+            <button onclick="setFilter('oov')" id="filter-oov" class="px-2.5 py-1 rounded-lg bg-gray-800 text-gray-400 hover:text-gray-200 font-medium">OOV</button>
+        </div>
+
+        <!-- Token List -->
+        <div id="token-list" class="flex-1 overflow-y-auto custom-scroll mt-3 space-y-1.5 pr-1">
+            <!-- Dynamically populated -->
+        </div>
+
+        <!-- 3D Camera & Simulation Controls -->
+        <div class="pt-3 mt-2 border-t border-gray-700/60 space-y-2">
+            <div class="flex items-center justify-between text-[11px] text-gray-400">
+                <span>Auto Rotation</span>
+                <input type="checkbox" id="auto-rotate" checked onchange="toggleAutoRotate(this.checked)" class="accent-cyan-500 cursor-pointer">
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-gray-400">
+                <span>Contextual Edges</span>
+                <input type="checkbox" id="show-edges" checked onchange="toggleEdges(this.checked)" class="accent-cyan-500 cursor-pointer">
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button onclick="resetCamera()" class="flex-1 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium transition-colors flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-crosshairs text-[10px]"></i> Reset View
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Floating Right Panel: Node Inspector & Logic Details -->
+    <aside id="inspector-panel" class="absolute top-24 right-4 w-88 glass-panel rounded-2xl p-4 z-20 shadow-2xl transition-all duration-300">
+        <div class="flex items-center justify-between pb-3 border-b border-gray-700/60">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-circle-info text-cyan-400 text-sm"></i>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-gray-200">Token Inspector</h2>
+            </div>
+            <span id="selected-badge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">In-Vocab</span>
+        </div>
+
+        <div id="inspector-content" class="mt-3 space-y-3">
+            <div>
+                <div class="text-[10px] uppercase text-gray-400">Token</div>
+                <div id="inspect-name" class="text-xl font-bold text-white tracking-wide">Select a Token</div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="glass-card p-2 rounded-xl">
+                    <span class="text-[10px] text-gray-400 block">Occurrences</span>
+                    <span id="inspect-count" class="font-bold text-white">-</span>
+                </div>
+                <div class="glass-card p-2 rounded-xl">
+                    <span class="text-[10px] text-gray-400 block">Relative Freq</span>
+                    <span id="inspect-freq" class="font-bold text-cyan-400">-</span>
+                </div>
+            </div>
+
+            <!-- Static vs Contextual Coordinates Comparison -->
+            <div class="glass-card p-3 rounded-xl space-y-2 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-cyan-300 flex items-center gap-1">
+                        <i class="fa-solid fa-shapes text-[10px]"></i> Static Coord (X, Y, Z)
+                    </span>
+                    <span id="inspect-static-coord" class="font-mono text-gray-300 text-[11px]">-</span>
+                </div>
+                <p class="text-[10px] text-gray-400 leading-tight">Fixed intrinsic position mapped from global co-occurrence & lexical length.</p>
+                <div class="h-px bg-gray-700/60"></div>
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-purple-300 flex items-center gap-1">
+                        <i class="fa-solid fa-brain text-[10px]"></i> Contextual Coord
+                    </span>
+                    <span id="inspect-context-coord" class="font-mono text-gray-300 text-[11px]">-</span>
+                </div>
+                <p class="text-[10px] text-gray-400 leading-tight">Shifted position dynamically pulled by neighboring context window tokens.</p>
+                <div class="h-px bg-gray-700/60"></div>
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-amber-300 text-[11px]">Contextual Drift (Δ)</span>
+                    <span id="inspect-drift" class="font-bold text-amber-400 text-xs">-</span>
+                </div>
+            </div>
+
+            <!-- Contextual Neighbors -->
+            <div>
+                <span class="text-[10px] uppercase text-gray-400 block mb-1">Co-occurring Context Neighbors</span>
+                <div id="inspect-neighbors" class="flex flex-wrap gap-1 text-[11px]">
+                    <span class="text-gray-500 italic text-[11px]">Hover or click a node</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logic Explainer Box -->
+        <div class="mt-4 pt-3 border-t border-gray-700/60 text-[11px] text-gray-400 space-y-1">
+            <div class="font-semibold text-gray-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-lightbulb text-yellow-400"></i> Logic Distinction
+            </div>
+            <p><strong>Static:</strong> Token has one fixed embedding regardless of surrounding words (Word2Vec / GloVe style).</p>
+            <p><strong>Contextual:</strong> Token shifts in 3D based on surrounding attention & sentence sequence (BERT / GPT style).</p>
+        </div>
+    </aside>
+
+    <!-- Legend at bottom center -->
+    <div class="absolute bottom-4 left-1/2 -translate-x-1/2 glass-panel px-4 py-2 rounded-xl flex items-center gap-5 text-xs z-10 shadow-xl">
+        <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span>
+            <span class="text-gray-300 text-[11px]">In-Vocab Token</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-rose-400 shadow-sm shadow-rose-400/50"></span>
+            <span class="text-gray-300 text-[11px]">Out-of-Vocab (OOV)</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400/50"></span>
+            <span class="text-gray-300 text-[11px]">Static Position</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-purple-400 shadow-sm shadow-purple-400/50"></span>
+            <span class="text-gray-300 text-[11px]">Contextual Shift</span>
+        </div>
+    </div>
+
+    <!-- Embedded Graph Data -->
+    <script>
+        const GRAPH_DATA = {
+            nodes: [{"id": "algorithm", "label": "algorithm", "count": 1, "frequency": 0.0769, "in_vocab": true, "static": {"x": 79.07, "y": -12.0, "z": 75.0}, "contextual": {"x": 67.5, "y": 17.48, "z": 20.45}, "occurrences": [{"index": 1, "token": "algorithm", "in_vocab": true, "neighbors": ["the", "analyzed", "the"], "static_coord": {"x": 79.07, "y": -12.0, "z": 75.0}, "context_coord": {"x": 67.5, "y": 17.48, "z": 20.45}, "drift_magnitude": 63.08}]}, {"id": "an", "label": "an", "count": 1, "frequency": 0.0769, "in_vocab": false, "static": {"x": 58.98, "y": 42.9, "z": -48.33}, "contextual": {"x": 20.84, "y": 18.81, "z": -32.17}, "occurrences": [{"index": 6, "token": "an", "in_vocab": false, "neighbors": ["computer", "and", "apple", "while"], "static_coord": {"x": 58.98, "y": 42.9, "z": -48.33}, "context_coord": {"x": 20.84, "y": 18.81, "z": -32.17}, "drift_magnitude": 47.92}]}, {"id": "analyzed", "label": "analyzed", "count": 1, "frequency": 0.0769, "in_vocab": false, "static": {"x": 17.38, "y": 73.13, "z": 31.67}, "contextual": {"x": 43.18, "y": 45.47, "z": 6.04}, "occurrences": [{"index": 2, "token": "analyzed", "in_vocab": false, "neighbors": ["the", "algorithm", "the", "computer"], "static_coord": {"x": 17.38, "y": 73.13, "z": 31.67}, "context_coord": {"x": 43.18, "y": 45.47, "z": 6.04}, "drift_magnitude": 45.69}]}, {"id": "and", "label": "and", "count": 1, "frequency": 0.0769, "in_vocab": false, "static": {"x": -34.04, "y": 73.13, "z": -35.0}, "contextual": {"x": -7.78, "y": 35.72, "z": -28.89}, "occurrences": [{"index": 5, "token": "and", "in_vocab": false, "neighbors": ["the", "computer", "an", "apple"], "static_coord": {"x": -34.04, "y": 73.13, "z": -35.0}, "context_coord": {"x": -7.78, "y": 35.72, "z": -28.89}, "drift_magnitude": 46.12}]}, {"id": "apple", "label": "apple", "count": 1, "frequency": 0.0769, "in_vocab": true, "static": {"x": -75.64, "y": 42.9, "z": 21.67}, "contextual": {"x": -28.03, "y": 5.97, "z": 5.7}, "occurrences": [{"index": 7, "token": "apple", "in_vocab": true, "neighbors": ["and", "an", "while", "the"], "static_coord": {"x": -75.64, "y": 42.9, "z": 21.67}, "context_coord": {"x": -28.03, "y": 5.97, "z": 5.7}, "drift_magnitude": 62.33}]}, {"id": "computer", "label": "computer", "count": 2, "frequency": 0.1538, "in_vocab": true, "static": {"x": -58.07, "y": 18.0, "z": 61.67}, "contextual": {"x": -29.3, "y": 1.74, "z": 37.53}, "occurrences": [{"index": 4, "token": "computer", "in_vocab": true, "neighbors": ["analyzed", "the", "and", "an"], "static_coord": {"x": -58.07, "y": 18.0, "z": 61.67}, "context_coord": {"x": -6.18, "y": 18.71, "z": 19.41}, "drift_magnitude": 66.93}, {"index": 10, "token": "computer", "in_vocab": true, "neighbors": ["while", "the", "processed", "data"], "static_coord": {"x": -58.07, "y": 18.0, "z": 61.67}, "context_coord": {"x": -52.42, "y": -15.24, "z": 55.66}, "drift_magnitude": 34.25}]}, {"id": "data", "label": "data", "count": 1, "frequency": 0.0769, "in_vocab": false, "static": {"x": -82.44, "y": -71.84, "z": -21.67}, "contextual": {"x": -73.95, "y": -47.64, "z": 28.99}, "occurrences": [{"index": 12, "token": "data", "in_vocab": false, "neighbors": ["computer", "processed"], "static_coord": {"x": -82.44, "y": -71.84, "z": -21.67}, "context_coord": {"x": -73.95, "y": -47.64, "z": 28.99}, "drift_magnitude": 56.79}]}, {"id": "processed", "label": "processed", "count": 1, "frequency": 0.0769, "in_vocab": false, "static": {"x": -35.34, "y": -95.12, "z": 45.0}, "contextual": {"x": -57.33, "y": -52.91, "z": 53.17}, "occurrences": [{"index": 11, "token": "processed", "in_vocab": false, "neighbors": ["the", "computer", "data"], "static_coord": {"x": -35.34, "y": -95.12, "z": 45.0}, "context_coord": {"x": -57.33, "y": -52.91, "z": 53.17}, "drift_magnitude": 48.29}]}, {"id": "the", "label": "the", "count": 3, "frequency": 0.2308, "in_vocab": false, "static": {"x": 42.92, "y": -25.16, "z": -35.0}, "contextual": {"x": 29.13, "y": -3.34, "z": -19.45}, "occurrences": [{"index": 0, "token": "the", "in_vocab": false, "neighbors": ["algorithm", "analyzed"], "static_coord": {"x": 42.92, "y": -25.16, "z": -35.0}, "context_coord": {"x": 49.93, "y": 13.53, "z": -31.56}, "drift_magnitude": 39.47}, {"index": 3, "token": "the", "in_vocab": false, "neighbors": ["algorithm", "analyzed", "computer", "and"], "static_coord": {"x": 42.92, "y": -25.16, "z": -35.0}, "context_coord": {"x": 40.73, "y": 6.83, "z": -25.68}, "drift_magnitude": 33.39}, {"index": 9, "token": "the", "in_vocab": false, "neighbors": ["apple", "while", "computer", "processed"], "static_coord": {"x": 42.92, "y": -25.16, "z": -35.0}, "context_coord": {"x": -3.28, "y": -30.38, "z": -1.1}, "drift_magnitude": 57.54}]}, {"id": "while", "label": "while", "count": 1, "frequency": 0.0769, "in_vocab": false, "static": {"x": 58.98, "y": -54.9, "z": -8.33}, "contextual": {"x": 14.34, "y": -37.94, "z": 0.73}, "occurrences": [{"index": 8, "token": "while", "in_vocab": false, "neighbors": ["an", "apple", "the", "computer"], "static_coord": {"x": 58.98, "y": -54.9, "z": -8.33}, "context_coord": {"x": 14.34, "y": -37.94, "z": 0.73}, "drift_magnitude": 48.61}]}],
+            links: [{"source": "the", "target": "algorithm", "weight": 2}, {"source": "the", "target": "analyzed", "weight": 2}, {"source": "the", "target": "computer", "weight": 2}, {"source": "the", "target": "and", "weight": 1}, {"source": "the", "target": "apple", "weight": 1}, {"source": "the", "target": "while", "weight": 1}, {"source": "the", "target": "processed", "weight": 1}, {"source": "algorithm", "target": "analyzed", "weight": 1}, {"source": "analyzed", "target": "computer", "weight": 1}, {"source": "computer", "target": "and", "weight": 1}, {"source": "computer", "target": "an", "weight": 1}, {"source": "computer", "target": "while", "weight": 1}, {"source": "computer", "target": "processed", "weight": 1}, {"source": "computer", "target": "data", "weight": 1}, {"source": "and", "target": "an", "weight": 1}, {"source": "and", "target": "apple", "weight": 1}, {"source": "an", "target": "apple", "weight": 1}, {"source": "an", "target": "while", "weight": 1}, {"source": "apple", "target": "while", "weight": 1}, {"source": "processed", "target": "data", "weight": 1}],
+            stream: [{"index": 0, "token": "the", "in_vocab": false, "static": {"x": 42.92, "y": -25.16, "z": -35.0}, "contextual": {"x": 49.93, "y": 13.53, "z": -31.56}, "drift": 39.47, "neighbors": ["algorithm", "analyzed"]}, {"index": 1, "token": "algorithm", "in_vocab": true, "static": {"x": 79.07, "y": -12.0, "z": 75.0}, "contextual": {"x": 67.5, "y": 17.48, "z": 20.45}, "drift": 63.08, "neighbors": ["the", "analyzed", "the"]}, {"index": 2, "token": "analyzed", "in_vocab": false, "static": {"x": 17.38, "y": 73.13, "z": 31.67}, "contextual": {"x": 43.18, "y": 45.47, "z": 6.04}, "drift": 45.69, "neighbors": ["the", "algorithm", "the", "computer"]}, {"index": 3, "token": "the", "in_vocab": false, "static": {"x": 42.92, "y": -25.16, "z": -35.0}, "contextual": {"x": 40.73, "y": 6.83, "z": -25.68}, "drift": 33.39, "neighbors": ["algorithm", "analyzed", "computer", "and"]}, {"index": 4, "token": "computer", "in_vocab": true, "static": {"x": -58.07, "y": 18.0, "z": 61.67}, "contextual": {"x": -6.18, "y": 18.71, "z": 19.41}, "drift": 66.93, "neighbors": ["analyzed", "the", "and", "an"]}, {"index": 5, "token": "and", "in_vocab": false, "static": {"x": -34.04, "y": 73.13, "z": -35.0}, "contextual": {"x": -7.78, "y": 35.72, "z": -28.89}, "drift": 46.12, "neighbors": ["the", "computer", "an", "apple"]}, {"index": 6, "token": "an", "in_vocab": false, "static": {"x": 58.98, "y": 42.9, "z": -48.33}, "contextual": {"x": 20.84, "y": 18.81, "z": -32.17}, "drift": 47.92, "neighbors": ["computer", "and", "apple", "while"]}, {"index": 7, "token": "apple", "in_vocab": true, "static": {"x": -75.64, "y": 42.9, "z": 21.67}, "contextual": {"x": -28.03, "y": 5.97, "z": 5.7}, "drift": 62.33, "neighbors": ["and", "an", "while", "the"]}, {"index": 8, "token": "while", "in_vocab": false, "static": {"x": 58.98, "y": -54.9, "z": -8.33}, "contextual": {"x": 14.34, "y": -37.94, "z": 0.73}, "drift": 48.61, "neighbors": ["an", "apple", "the", "computer"]}, {"index": 9, "token": "the", "in_vocab": false, "static": {"x": 42.92, "y": -25.16, "z": -35.0}, "contextual": {"x": -3.28, "y": -30.38, "z": -1.1}, "drift": 57.54, "neighbors": ["apple", "while", "computer", "processed"]}, {"index": 10, "token": "computer", "in_vocab": true, "static": {"x": -58.07, "y": 18.0, "z": 61.67}, "contextual": {"x": -52.42, "y": -15.24, "z": 55.66}, "drift": 34.25, "neighbors": ["while", "the", "processed", "data"]}, {"index": 11, "token": "processed", "in_vocab": false, "static": {"x": -35.34, "y": -95.12, "z": 45.0}, "contextual": {"x": -57.33, "y": -52.91, "z": 53.17}, "drift": 48.29, "neighbors": ["the", "computer", "data"]}, {"index": 12, "token": "data", "in_vocab": false, "static": {"x": -82.44, "y": -71.84, "z": -21.67}, "contextual": {"x": -73.95, "y": -47.64, "z": 28.99}, "drift": 56.79, "neighbors": ["computer", "processed"]}],
+            stats: {
+                total: 13,
+                unique: 10,
+                in_vocab: 4,
+                oov: 9,
+                coverage: 30.8
+            }
+        };
+
+        let scene, camera, renderer, controls;
+        let nodeObjects = new Map();
+        let linkObjects = [];
+        let vectorArrows = [];
+        let currentMode = 'static'; // 'static' | 'contextual' | 'dual'
+        let currentFilter = 'all';
+        let selectedNode = null;
+        let raycaster, mouse;
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0b0f19, 0.0018);
+
+            camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 2000);
+            camera.position.set(0, 70, 240);
+
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 600;
+            controls.minDistance = 30;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0x60a5fa, 0.9);
+            dirLight.position.set(100, 150, 100);
+            scene.add(dirLight);
+
+            const pointLight = new THREE.PointLight(0xa855f7, 1.2, 500);
+            pointLight.position.set(-100, -50, -50);
+            scene.add(pointLight);
+
+            // Add 3D Coordinate Grid Guide
+            const gridHelper = new THREE.GridHelper(300, 30, 0x1f2937, 0x111827);
+            gridHelper.position.y = -80;
+            scene.add(gridHelper);
+
+            // Raycasting for node interaction
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('click', onClick);
+
+            build3DGraph();
+            renderTokenList();
+            if (GRAPH_DATA.nodes.length > 0) {
+                selectToken(GRAPH_DATA.nodes[0].id);
+            }
+
+            animate();
+        }
+
+        function build3DGraph() {
+            // Clear existing
+            nodeObjects.forEach(obj => scene.remove(obj.mesh));
+            nodeObjects.clear();
+            linkObjects.forEach(line => scene.remove(line));
+            linkObjects = [];
+            vectorArrows.forEach(arrow => scene.remove(arrow));
+            vectorArrows = [];
+
+            // 1. Create Node Spheres & Text Labels
+            GRAPH_DATA.nodes.forEach(node => {
+                const radius = Math.max(2.8, Math.min(8.0, 2.5 + Math.sqrt(node.count) * 2.2));
+                const geometry = new THREE.SphereGeometry(radius, 24, 24);
+
+                let color = node.in_vocab ? 0x10b981 : 0xf43f5e; // emerald vs rose
+                const material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    roughness: 0.3,
+                    metalness: 0.5,
+                    emissive: color,
+                    emissiveIntensity: 0.25
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.userData = node;
+
+                // Position based on current mode
+                const targetPos = currentMode === 'contextual' ? node.contextual : node.static;
+                mesh.position.set(targetPos.x, targetPos.y, targetPos.z);
+                scene.add(mesh);
+
+                // Add Sprite Text Label
+                const labelCanvas = document.createElement('canvas');
+                const ctx = labelCanvas.getContext('2d');
+                labelCanvas.width = 256;
+                labelCanvas.height = 64;
+                ctx.font = 'bold 24px -apple-system, sans-serif';
+                ctx.fillStyle = node.in_vocab ? '#a7f3d0' : '#fecdd3';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.label, 128, 40);
+
+                const texture = new THREE.CanvasTexture(labelCanvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.85 });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(22, 5.5, 1);
+                sprite.position.set(0, radius + 3.5, 0);
+                mesh.add(sprite);
+
+                nodeObjects.set(node.id, {
+                    mesh: mesh,
+                    data: node,
+                    currentPos: { ...mesh.position },
+                    targetPos: { ...targetPos }
+                });
+            });
+
+            // 2. Build Co-occurrence Edges
+            const lineMat = new THREE.LineBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.22,
+                linewidth: 1
+            });
+
+            GRAPH_DATA.links.forEach(link => {
+                const sourceObj = nodeObjects.get(link.source);
+                const targetObj = nodeObjects.get(link.target);
+                if (sourceObj && targetObj) {
+                    const geom = new THREE.BufferGeometry().setFromPoints([
+                        sourceObj.mesh.position,
+                        targetObj.mesh.position
+                    ]);
+                    const line = new THREE.Line(geom, lineMat);
+                    line.userData = { source: link.source, target: link.target };
+                    scene.add(line);
+                    linkObjects.push(line);
+                }
+            });
+
+            // 3. Build Dual-mode Vector Arrows (Static -> Contextual displacement)
+            GRAPH_DATA.nodes.forEach(node => {
+                const s = node.static;
+                const c = node.contextual;
+                const from = new THREE.Vector3(s.x, s.y, s.z);
+                const to = new THREE.Vector3(c.x, c.y, c.z);
+                const dir = new THREE.Vector3().subVectors(to, from);
+                const length = dir.length();
+
+                if (length > 0.5) {
+                    dir.normalize();
+                    const arrow = new THREE.ArrowHelper(dir, from, length, 0xa855f7, 2.5, 1.8);
+                    arrow.visible = (currentMode === 'dual');
+                    scene.add(arrow);
+                    vectorArrows.push(arrow);
+                }
+            });
+        }
+
+        function updateNodePositionsAnimated() {
+            nodeObjects.forEach(obj => {
+                const target = currentMode === 'contextual' ? obj.data.contextual : obj.data.static;
+                obj.targetPos = target;
+            });
+
+            vectorArrows.forEach(arrow => {
+                arrow.visible = (currentMode === 'dual');
+            });
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            ['static', 'contextual', 'dual'].forEach(m => {
+                const btn = document.getElementById(`btn-${m}`);
+                if (m === mode) {
+                    btn.className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 bg-cyan-500 text-white shadow-md shadow-cyan-500/30 flex items-center gap-2";
+                } else {
+                    btn.className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 text-gray-400 hover:text-white flex items-center gap-2";
+                }
+            });
+
+            updateNodePositionsAnimated();
+            if (selectedNode) selectToken(selectedNode);
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            ['all', 'invocab', 'oov'].forEach(f => {
+                const btn = document.getElementById(`filter-${f}`);
+                if (f === filter) {
+                    btn.className = "px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-medium";
+                } else {
+                    btn.className = "px-2.5 py-1 rounded-lg bg-gray-800 text-gray-400 hover:text-gray-200 font-medium";
+                }
+            });
+
+            renderTokenList();
+            updateNodeVisibility();
+        }
+
+        function updateNodeVisibility() {
+            const searchVal = document.getElementById('token-search').value.toLowerCase();
+            nodeObjects.forEach((obj, id) => {
+                let matchFilter = true;
+                if (currentFilter === 'invocab') matchFilter = obj.data.in_vocab;
+                if (currentFilter === 'oov') matchFilter = !obj.data.in_vocab;
+                let matchSearch = id.toLowerCase().includes(searchVal);
+                obj.mesh.visible = matchFilter && matchSearch;
+            });
+        }
+
+        function renderTokenList() {
+            const container = document.getElementById('token-list');
+            const searchVal = (document.getElementById('token-search')?.value || '').toLowerCase();
+            container.innerHTML = '';
+
+            const filtered = GRAPH_DATA.nodes.filter(n => {
+                let matchFilter = true;
+                if (currentFilter === 'invocab') matchFilter = n.in_vocab;
+                if (currentFilter === 'oov') matchFilter = !n.in_vocab;
+                return matchFilter && n.label.toLowerCase().includes(searchVal);
+            });
+
+            filtered.sort((a, b) => b.count - a.count);
+
+            filtered.forEach(node => {
+                const item = document.createElement('div');
+                item.className = `p-2 rounded-xl cursor-pointer transition-all flex items-center justify-between text-xs ${
+                    selectedNode === node.id ? 'bg-cyan-500/20 border border-cyan-500/50 text-white' : 'glass-card hover:bg-gray-800/80 text-gray-300'
+                }`;
+                item.onclick = () => selectToken(node.id);
+                item.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full ${node.in_vocab ? 'bg-emerald-400' : 'bg-rose-400'}"></span>
+                        <span class="font-medium font-mono">${node.label}</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-[11px]">
+                        <span class="text-gray-400">${node.count}x</span>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded ${node.in_vocab ? 'bg-emerald-900/40 text-emerald-300' : 'bg-rose-900/40 text-rose-300'}">
+                            ${node.in_vocab ? 'VOCAB' : 'OOV'}
+                        </span>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function filterTokens() {
+            renderTokenList();
+            updateNodeVisibility();
+        }
+
+        function selectToken(tokenId) {
+            selectedNode = tokenId;
+            const node = GRAPH_DATA.nodes.find(n => n.id === tokenId);
+            if (!node) return;
+
+            document.getElementById('inspect-name').textContent = node.label;
+            document.getElementById('inspect-count').textContent = `${node.count} occurrences`;
+            document.getElementById('inspect-freq').textContent = `${(node.frequency * 100).toFixed(2)}%`;
+
+            const badge = document.getElementById('selected-badge');
+            if (node.in_vocab) {
+                badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+                badge.textContent = "In-Vocabulary";
+            } else {
+                badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                badge.textContent = "Out-Of-Vocabulary (OOV)";
+            }
+
+            document.getElementById('inspect-static-coord').textContent = 
+                `(${node.static.x}, ${node.static.y}, ${node.static.z})`;
+            document.getElementById('inspect-context-coord').textContent = 
+                `(${node.contextual.x}, ${node.contextual.y}, ${node.contextual.z})`;
+
+            const dx = node.contextual.x - node.static.x;
+            const dy = node.contextual.y - node.static.y;
+            const dz = node.contextual.z - node.static.z;
+            const drift = Math.sqrt(dx*dx + dy*dy + dz*dz).toFixed(2);
+            document.getElementById('inspect-drift').textContent = `${drift} units`;
+
+            // Neighbors
+            const neighborSet = new Set();
+            node.occurrences.forEach(occ => {
+                occ.neighbors.forEach(nbr => neighborSet.add(nbr));
+            });
+            const nbrContainer = document.getElementById('inspect-neighbors');
+            nbrContainer.innerHTML = '';
+            if (neighborSet.size === 0) {
+                nbrContainer.innerHTML = '<span class="text-gray-500 italic text-[11px]">No adjacent neighbors in context window</span>';
+            } else {
+                Array.from(neighborSet).forEach(nbr => {
+                    const span = document.createElement('span');
+                    span.className = "px-2 py-0.5 rounded-lg bg-gray-800 text-cyan-300 border border-gray-700 font-mono text-[10px] cursor-pointer hover:bg-gray-700";
+                    span.textContent = nbr;
+                    span.onclick = () => selectToken(nbr);
+                    nbrContainer.appendChild(span);
+                });
+            }
+
+            // Highlight node mesh in 3D
+            nodeObjects.forEach((obj, id) => {
+                if (id === tokenId) {
+                    obj.mesh.material.emissiveIntensity = 0.9;
+                    obj.mesh.scale.set(1.4, 1.4, 1.4);
+                } else {
+                    obj.mesh.material.emissiveIntensity = 0.2;
+                    obj.mesh.scale.set(1.0, 1.0, 1.0);
+                }
+            });
+
+            renderTokenList();
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onClick(event) {
+            raycaster.setFromCamera(mouse, camera);
+            const meshes = Array.from(nodeObjects.values()).map(o => o.mesh);
+            const intersects = raycaster.intersectObjects(meshes);
+            if (intersects.length > 0) {
+                const targetNode = intersects[0].object.userData;
+                selectToken(targetNode.id);
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function toggleAutoRotate(val) {
+            controls.autoRotate = val;
+            controls.autoRotateSpeed = 1.0;
+        }
+
+        function toggleEdges(val) {
+            linkObjects.forEach(l => l.visible = val);
+        }
+
+        function resetCamera() {
+            camera.position.set(0, 70, 240);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Smooth interpolation to target positions
+            nodeObjects.forEach(obj => {
+                obj.mesh.position.lerp(
+                    new THREE.Vector3(obj.targetPos.x, obj.targetPos.y, obj.targetPos.z),
+                    0.08
+                );
+            });
+
+            // Update edge endpoints
+            linkObjects.forEach(line => {
+                const sObj = nodeObjects.get(line.userData.source);
+                const tObj = nodeObjects.get(line.userData.target);
+                if (sObj && tObj) {
+                    const positions = line.geometry.attributes.position.array;
+                    positions[0] = sObj.mesh.position.x;
+                    positions[1] = sObj.mesh.position.y;
+                    positions[2] = sObj.mesh.position.z;
+                    positions[3] = tObj.mesh.position.x;
+                    positions[4] = tObj.mesh.position.y;
+                    positions[5] = tObj.mesh.position.z;
+                    line.geometry.attributes.position.needsUpdate = true;
+                }
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = () => {
+            toggleAutoRotate(true);
+            initScene();
+        };
+    </script>
+</body>
+</html>

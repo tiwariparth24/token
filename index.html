@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Counter & 3D Semantic Graph (Static vs Contextual)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #080c14;
+            color: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .gradient-border-cyan {
+            border: 1px solid rgba(6, 182, 212, 0.4);
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.15);
+        }
+        .glow-text-cyan {
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25">
+                <i class="fa-solid fa-shapes text-lg"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-base font-bold text-white tracking-wide">Token Counter & 3D Graph Mapper</h1>
+                    <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">NLP Engine</span>
+                </div>
+                <p class="text-xs text-slate-400">Vocabulary validation, word counting, and 3D Static & Contextual spatial representations</p>
+            </div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="flex items-center gap-3">
+            <button onclick="loadSample(1)" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border border-slate-700/60 transition-all flex items-center gap-1.5">
+                <i class="fa-solid fa-wand-magic-sparkles text-cyan-400"></i> AI & NLP Preset
+            </button>
+            <button onclick="loadSample(2)" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border border-slate-700/60 transition-all flex items-center gap-1.5">
+                <i class="fa-solid fa-code-compare text-purple-400"></i> Contextual Polysemy Preset
+            </button>
+            <a href="#graph-section" class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-md shadow-cyan-500/25 transition-all flex items-center gap-2">
+                <i class="fa-solid fa-cube"></i> View 3D Graph
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+        <!-- Top Step Cards (Step 1: Vocab & Step 2: Input Text) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- STEP 1: Vocabulary Input -->
+            <section class="glass-panel rounded-2xl p-5 shadow-2xl flex flex-col justify-between border border-slate-800">
+                <div>
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-400 font-bold text-xs flex items-center justify-center border border-cyan-500/40">1</span>
+                            <h2 class="text-sm font-bold uppercase tracking-wider text-white">Ask for Vocabulary</h2>
+                        </div>
+                        <span id="vocab-count-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-mono font-medium">30 words</span>
+                    </div>
+
+                    <p class="text-xs text-slate-400 mt-2.5 leading-relaxed">
+                        Define the reference vocabulary. All incoming text tokens will be checked against this vocabulary to compute in-vocab frequency vs out-of-vocab (OOV) tokens.
+                    </p>
+
+                    <!-- Presets Selection -->
+                    <div class="flex flex-wrap gap-2 mt-3.5">
+                        <span class="text-[11px] text-slate-500 flex items-center mr-1">Presets:</span>
+                        <button onclick="setVocabPreset('ai')" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-cyan-900/40 text-cyan-300 border border-slate-700 hover:border-cyan-500/40 transition-colors">AI & NLP Core</button>
+                        <button onclick="setVocabPreset('english')" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-cyan-900/40 text-cyan-300 border border-slate-700 hover:border-cyan-500/40 transition-colors">Common English</button>
+                        <button onclick="setVocabPreset('finance')" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-cyan-900/40 text-cyan-300 border border-slate-700 hover:border-cyan-500/40 transition-colors">Finance</button>
+                        <button onclick="clearVocab()" class="text-[11px] px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 transition-colors">Clear</button>
+                    </div>
+
+                    <!-- Vocab Textarea -->
+                    <div class="mt-3 relative">
+                        <textarea id="vocab-input" rows="4" 
+                            placeholder="Enter vocabulary words separated by commas, spaces, or lines..." 
+                            class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500 transition-colors custom-scrollbar resize-none"></textarea>
+                    </div>
+
+                    <!-- Vocabulary Preview Pills -->
+                    <div class="mt-2.5">
+                        <div class="text-[10px] text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                            <span>Vocabulary Chips Preview (scrollable)</span>
+                            <span class="text-slate-500 text-[10px]">Case-insensitive</span>
+                        </div>
+                        <div id="vocab-chips" class="h-16 overflow-y-auto custom-scrollbar flex flex-wrap gap-1 p-2 rounded-xl bg-slate-900/50 border border-slate-800">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                    <span class="text-slate-400">Tokens separated by spaces, commas, or newlines</span>
+                    <button onclick="applyVocabulary()" class="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-medium transition-colors flex items-center gap-1.5">
+                        <i class="fa-solid fa-check"></i> Register Vocabulary
+                    </button>
+                </div>
+            </section>
+
+            <!-- STEP 2: Input Text to Count -->
+            <section class="glass-panel rounded-2xl p-5 shadow-2xl flex flex-col justify-between border border-slate-800">
+                <div>
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-400 font-bold text-xs flex items-center justify-center border border-purple-500/40">2</span>
+                            <h2 class="text-sm font-bold uppercase tracking-wider text-white">Count All Words in Text</h2>
+                        </div>
+                        <span id="text-word-count-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-purple-950/80 text-purple-300 border border-purple-800/60 font-mono font-medium">0 words</span>
+                    </div>
+
+                    <p class="text-xs text-slate-400 mt-2.5 leading-relaxed">
+                        Enter any sentence or passage. The counter will tokenize the text, compute frequencies, identify vocabulary membership, and compute 3D static and contextual coordinates.
+                    </p>
+
+                    <!-- Textarea -->
+                    <div class="mt-3 relative">
+                        <textarea id="corpus-input" rows="4" 
+                            placeholder="Type or paste text here to count tokens and map in 3D..." 
+                            class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors custom-scrollbar resize-none"></textarea>
+                    </div>
+
+                    <!-- Parameter Controls -->
+                    <div class="grid grid-cols-2 gap-3 mt-3">
+                        <div class="glass-card p-2.5 rounded-xl">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-slate-300 text-[11px] font-medium">Context Window (W)</span>
+                                <span id="window-val" class="font-mono text-cyan-400 font-bold text-xs">2</span>
+                            </div>
+                            <input type="range" id="window-slider" min="1" max="5" value="2" oninput="document.getElementById('window-val').textContent = this.value; processTokens();" 
+                                class="w-full accent-cyan-500 cursor-pointer mt-1">
+                            <span class="text-[10px] text-slate-500 block">Surrounding tokens influencing context</span>
+                        </div>
+                        <div class="glass-card p-2.5 rounded-xl">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-slate-300 text-[11px] font-medium">Attention Pull Strength</span>
+                                <span id="drift-val" class="font-mono text-purple-400 font-bold text-xs">0.45</span>
+                            </div>
+                            <input type="range" id="drift-slider" min="0.1" max="1.0" step="0.05" value="0.45" oninput="document.getElementById('drift-val').textContent = this.value; processTokens();" 
+                                class="w-full accent-purple-500 cursor-pointer mt-1">
+                            <span class="text-[10px] text-slate-500 block">Contextual displacement magnitude</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Real-time dynamic updates</span>
+                    <button onclick="processTokens()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:opacity-90 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-play"></i> Run Tokenizer & Map 3D
+                    </button>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- Metric Badges Bar -->
+        <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div class="glass-panel p-3.5 rounded-2xl border border-slate-800">
+                <span class="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block">Total Words</span>
+                <span id="metric-total" class="text-2xl font-bold text-white mt-1 block">0</span>
+                <span class="text-[10px] text-slate-500">In text stream</span>
+            </div>
+            <div class="glass-panel p-3.5 rounded-2xl border border-slate-800">
+                <span class="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block">Unique Tokens</span>
+                <span id="metric-unique" class="text-2xl font-bold text-cyan-400 mt-1 block">0</span>
+                <span class="text-[10px] text-slate-500">Vocabulary types</span>
+            </div>
+            <div class="glass-panel p-3.5 rounded-2xl border border-slate-800">
+                <span class="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block">Vocab Size (Ref)</span>
+                <span id="metric-vocab-size" class="text-2xl font-bold text-indigo-400 mt-1 block">0</span>
+                <span class="text-[10px] text-slate-500">Registered dictionary</span>
+            </div>
+            <div class="glass-panel p-3.5 rounded-2xl border border-slate-800">
+                <span class="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block">In-Vocab Words</span>
+                <span id="metric-invocab" class="text-2xl font-bold text-emerald-400 mt-1 block">0</span>
+                <span id="metric-coverage" class="text-[10px] text-emerald-500">0% coverage</span>
+            </div>
+            <div class="glass-panel p-3.5 rounded-2xl border border-slate-800">
+                <span class="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block">Out-Of-Vocab (OOV)</span>
+                <span id="metric-oov" class="text-2xl font-bold text-rose-400 mt-1 block">0</span>
+                <span id="metric-oov-pct" class="text-[10px] text-rose-500">0% unmapped</span>
+            </div>
+            <div class="glass-panel p-3.5 rounded-2xl border border-slate-800">
+                <span class="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block">Lexical Richness</span>
+                <span id="metric-ttr" class="text-2xl font-bold text-amber-400 mt-1 block">0.00</span>
+                <span class="text-[10px] text-slate-500">Type-Token Ratio</span>
+            </div>
+        </section>
+
+        <!-- STEP 3: 3D GRAPH VISUALIZER SECTION -->
+        <section id="graph-section" class="glass-panel rounded-3xl p-5 border border-slate-800 shadow-2xl space-y-4">
+            <!-- 3D Header & Control Toolbar -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                        <i class="fa-solid fa-cube text-base"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-base font-bold text-white tracking-wide">3D Token Universe</h2>
+                            <span id="current-mode-label" class="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-medium">Static Logic Active</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Interactive spatial mapping with dual cognitive embedding logics</p>
+                    </div>
+                </div>
+
+                <!-- Logic Mode Switcher Buttons -->
+                <div class="glass-card p-1 rounded-xl flex items-center gap-1 border border-slate-700">
+                    <button id="mode-btn-static" onclick="setGraphMode('static')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500 text-white shadow-md shadow-cyan-500/30 flex items-center gap-2 transition-all">
+                        <i class="fa-solid fa-shapes"></i> Static Logic
+                    </button>
+                    <button id="mode-btn-contextual" onclick="setGraphMode('contextual')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-2 transition-all">
+                        <i class="fa-solid fa-brain"></i> Contextual Logic
+                    </button>
+                    <button id="mode-btn-dual" onclick="setGraphMode('dual')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-2 transition-all">
+                        <i class="fa-solid fa-route"></i> Shift Vector (Dual)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main 3D Canvas + Overlay Controls -->
+            <div class="relative w-full h-[580px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-950">
+                <canvas id="webgl-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+                <!-- Floating Left: Controls & Node Finder -->
+                <div class="absolute top-4 left-4 z-10 space-y-2 pointer-events-none">
+                    <div class="glass-panel p-3 rounded-xl pointer-events-auto shadow-xl max-w-xs space-y-2.5 border border-slate-800/90 text-xs">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                            <span class="font-bold uppercase tracking-wider text-slate-300 text-[11px] flex items-center gap-1.5">
+                                <i class="fa-solid fa-sliders text-cyan-400"></i> View Controls
+                            </span>
+                            <button onclick="reset3DCamera()" class="text-[10px] text-cyan-400 hover:underline">Reset Camera</button>
+                        </div>
+
+                        <div class="flex items-center justify-between text-slate-300">
+                            <span>Auto Rotation</span>
+                            <input type="checkbox" id="check-autorotate" checked onchange="toggleAutoRotate(this.checked)" class="accent-cyan-500 cursor-pointer">
+                        </div>
+
+                        <div class="flex items-center justify-between text-slate-300">
+                            <span>Contextual Edges</span>
+                            <input type="checkbox" id="check-edges" checked onchange="toggleEdges(this.checked)" class="accent-cyan-500 cursor-pointer">
+                        </div>
+
+                        <div class="flex items-center justify-between text-slate-300">
+                            <span>Token Labels</span>
+                            <input type="checkbox" id="check-labels" checked onchange="toggleLabels(this.checked)" class="accent-cyan-500 cursor-pointer">
+                        </div>
+
+                        <div class="flex items-center justify-between text-slate-300">
+                            <span>Filter Tokens</span>
+                            <select id="filter-select" onchange="applyNodeFilter(this.value)" class="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded px-1.5 py-0.5 focus:outline-none">
+                                <option value="all">All Tokens</option>
+                                <option value="invocab">In-Vocab Only</option>
+                                <option value="oov">OOV Only</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Floating Right: Interactive Inspector -->
+                <div class="absolute top-4 right-4 z-10 pointer-events-none">
+                    <div class="glass-panel p-4 rounded-2xl pointer-events-auto shadow-2xl w-80 space-y-3 border border-slate-800/90 text-xs">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                            <span class="font-bold uppercase tracking-wider text-slate-300 text-[11px] flex items-center gap-1.5">
+                                <i class="fa-solid fa-circle-info text-cyan-400"></i> Token Inspector
+                            </span>
+                            <span id="inspect-status-pill" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">In-Vocab</span>
+                        </div>
+
+                        <div>
+                            <div class="text-[10px] uppercase text-slate-400">Selected Token</div>
+                            <div id="inspect-word" class="text-xl font-bold text-white tracking-wide font-mono">-</div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="glass-card p-2 rounded-xl">
+                                <span class="text-[10px] text-slate-400 block">Occurrences</span>
+                                <span id="inspect-occ" class="font-bold text-white text-sm">-</span>
+                            </div>
+                            <div class="glass-card p-2 rounded-xl">
+                                <span class="text-[10px] text-slate-400 block">Frequency</span>
+                                <span id="inspect-pct" class="font-bold text-cyan-400 text-sm">-</span>
+                            </div>
+                        </div>
+
+                        <!-- 3D Coordinates Box -->
+                        <div class="glass-card p-2.5 rounded-xl space-y-2 text-[11px]">
+                            <div class="flex items-center justify-between">
+                                <span class="text-cyan-300 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-shapes text-[9px]"></i> Static (X, Y, Z)
+                                </span>
+                                <span id="inspect-static-pos" class="font-mono text-slate-300">-</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-purple-300 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-brain text-[9px]"></i> Contextual (X, Y, Z)
+                                </span>
+                                <span id="inspect-context-pos" class="font-mono text-slate-300">-</span>
+                            </div>
+                            <div class="flex items-center justify-between pt-1 border-t border-slate-700/60">
+                                <span class="text-amber-300 font-semibold">Semantic Drift (Δ)</span>
+                                <span id="inspect-drift-dist" class="font-bold text-amber-400">-</span>
+                            </div>
+                        </div>
+
+                        <!-- Contextual Neighbors -->
+                        <div>
+                            <div class="text-[10px] uppercase text-slate-400 mb-1">Local Context Window Neighbors</div>
+                            <div id="inspect-neighbors-list" class="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar">
+                                <span class="text-slate-500 italic text-[11px]">Click any node in 3D scene</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Floating Bottom Legend -->
+                <div class="absolute bottom-4 left-1/2 -translate-x-1/2 glass-panel px-4 py-2 rounded-xl flex items-center gap-6 text-xs z-10 shadow-2xl border border-slate-800">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span>
+                        <span class="text-slate-300 text-[11px]">In-Vocab Token</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-rose-400 shadow-sm shadow-rose-400/50"></span>
+                        <span class="text-slate-300 text-[11px]">Out-of-Vocab (OOV)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400/50"></span>
+                        <span class="text-slate-300 text-[11px]">Static Base Node</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-purple-400 shadow-sm shadow-purple-400/50"></span>
+                        <span class="text-slate-300 text-[11px]">Contextual Shift</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logic Explanation Banner -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div class="glass-card p-4 rounded-2xl border-l-4 border-cyan-500 space-y-1.5">
+                    <div class="flex items-center gap-2 text-cyan-400 font-bold text-xs uppercase tracking-wider">
+                        <i class="fa-solid fa-shapes"></i> Static Logic Architecture
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        In <strong>Static Logic</strong>, each unique token has an immutable 3D coordinate derived from global corpus frequency, lexical length, and the co-occurrence degree matrix. Identical words always map to the exact same position in space, similar to static word embeddings (e.g. GloVe or Word2Vec).
+                    </p>
+                </div>
+
+                <div class="glass-card p-4 rounded-2xl border-l-4 border-purple-500 space-y-1.5">
+                    <div class="flex items-center gap-2 text-purple-400 font-bold text-xs uppercase tracking-wider">
+                        <i class="fa-solid fa-brain"></i> Contextual Logic Architecture
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        In <strong>Contextual Logic</strong>, token positions are dynamically shifted by an attention-weighted pull vector calculated from immediate neighboring tokens in the sliding context window, combined with sequence positional flow. Words adapt to their immediate semantic neighborhood, reflecting modern Transformer architectures (e.g. BERT / GPT).
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- STEP 4: Token Frequency Table & Distribution -->
+        <section class="glass-panel rounded-2xl p-5 border border-slate-800 shadow-2xl space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center border border-emerald-500/40">3</span>
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-white">Token Frequency Breakdown Table</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="text" id="table-search" oninput="renderTable()" placeholder="Search word in table..." 
+                        class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-[11px] text-slate-400 uppercase tracking-wider">
+                            <th class="py-2.5 px-3">Rank</th>
+                            <th class="py-2.5 px-3">Token</th>
+                            <th class="py-2.5 px-3">Count</th>
+                            <th class="py-2.5 px-3">Relative Freq</th>
+                            <th class="py-2.5 px-3">Status</th>
+                            <th class="py-2.5 px-3">Static Coord (X, Y, Z)</th>
+                            <th class="py-2.5 px-3">Contextual Mean (X, Y, Z)</th>
+                            <th class="py-2.5 px-3">Semantic Drift (Δ)</th>
+                            <th class="py-2.5 px-3 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="token-table-body" class="divide-y divide-slate-800/60 font-mono">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800/80 py-4 px-6 text-center text-xs text-slate-500">
+        Token Counter with Static & Contextual 3D Logic • Built with HTML5, Tailwind CSS & Three.js WebGL
+    </footer>
+
+    <!-- Application Script -->
+    <script>
+        // Preset Vocabularies
+        const PRESETS = {
+            ai: [
+                "token", "vocabulary", "model", "attention", "transformer", "context",
+                "embedding", "vector", "layer", "neural", "network", "semantic",
+                "sequence", "weight", "matrix", "dimension", "loss", "gradient",
+                "training", "inference", "encoder", "decoder", "graph", "static",
+                "dynamic", "cluster", "frequency", "corpus", "text", "language"
+            ],
+            english: [
+                "the", "be", "to", "of", "and", "a", "in", "that", "have", "i",
+                "it", "for", "not", "on", "with", "he", "as", "you", "do", "at",
+                "this", "but", "his", "by", "from", "they", "we", "say", "her",
+                "she", "or", "an", "will", "my", "one", "all", "would", "there",
+                "their", "what", "so", "up", "out", "if", "about", "who", "get",
+                "which", "go", "me", "when", "make", "can", "like", "time", "no"
+            ],
+            finance: [
+                "market", "stock", "trade", "investment", "price", "capital", "revenue",
+                "profit", "loss", "bank", "credit", "asset", "liability", "fund",
+                "growth", "risk", "bond", "equity", "rate", "currency", "inflation", "yield"
+            ]
+        };
+
+        const SAMPLES = {
+            1: {
+                vocab: PRESETS.ai,
+                text: "The transformer model uses attention mechanisms to map tokens into a high dimensional vector space. Each token gets both static and contextual representations based on surrounding context words."
+            },
+            2: {
+                vocab: ["bank", "river", "water", "financial", "money", "capital", "market", "green", "grass", "deposit"],
+                text: "The bank by the river had cool water and green grass. Meanwhile the commercial bank received a deposit of capital for investment in the stock market."
+            }
+        };
+
+        let vocabularySet = new Set();
+        let currentTokens = [];
+        let tokenDataList = [];
+        let coOccurrenceMatrix = {};
+
+        // Three.js Scene Variables
+        let scene, camera, renderer, controls;
+        let nodeMeshes = new Map();
+        let linkLines = [];
+        let vectorArrows = [];
+        let activeGraphMode = 'static'; // 'static' | 'contextual' | 'dual'
+        let selectedTokenId = null;
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+
+        function tokenize(text) {
+            const matches = text.toLowerCase().match(/\b[a-zA-Z0-9_\-']+\b/g);
+            return matches || [];
+        }
+
+        function setVocabPreset(name) {
+            if (PRESETS[name]) {
+                document.getElementById('vocab-input').value = PRESETS[name].join(", ");
+                applyVocabulary();
+            }
+        }
+
+        function clearVocab() {
+            document.getElementById('vocab-input').value = "";
+            applyVocabulary();
+        }
+
+        function applyVocabulary() {
+            const text = document.getElementById('vocab-input').value;
+            const words = tokenize(text);
+            vocabularySet = new Set(words);
+
+            document.getElementById('vocab-count-badge').textContent = `${vocabularySet.size} words`;
+            document.getElementById('metric-vocab-size').textContent = vocabularySet.size;
+
+            // Render chips
+            const chipsContainer = document.getElementById('vocab-chips');
+            chipsContainer.innerHTML = '';
+            if (vocabularySet.size === 0) {
+                chipsContainer.innerHTML = '<span class="text-slate-500 text-xs italic">No vocabulary words entered. Enter words above or select a preset.</span>';
+            } else {
+                vocabularySet.forEach(word => {
+                    const chip = document.createElement('span');
+                    chip.className = "px-2 py-0.5 rounded-lg bg-cyan-950/70 border border-cyan-800/60 text-cyan-300 font-mono text-[10px]";
+                    chip.textContent = word;
+                    chipsContainer.appendChild(chip);
+                });
+            }
+
+            processTokens();
+        }
+
+        function loadSample(num) {
+            const sample = SAMPLES[num];
+            if (!sample) return;
+            document.getElementById('vocab-input').value = sample.vocab.join(", ");
+            document.getElementById('corpus-input').value = sample.text;
+            applyVocabulary();
+        }
+
+        function processTokens() {
+            const text = document.getElementById('corpus-input').value;
+            currentTokens = tokenize(text);
+            const total = currentTokens.length;
+
+            document.getElementById('text-word-count-badge').textContent = `${total} words`;
+            document.getElementById('metric-total').textContent = total;
+
+            if (total === 0) {
+                clearVisualizer();
+                return;
+            }
+
+            // Frequency counts
+            const counts = {};
+            currentTokens.forEach(t => counts[t] = (counts[t] || 0) + 1);
+            const unique = Object.keys(counts);
+
+            document.getElementById('metric-unique').textContent = unique.length;
+
+            // In-Vocab vs OOV
+            let inVocabCount = 0;
+            currentTokens.forEach(t => {
+                if (vocabularySet.has(t)) inVocabCount++;
+            });
+            const oovCount = total - inVocabCount;
+            const coverage = total > 0 ? ((inVocabCount / total) * 100).toFixed(1) : 0;
+            const oovPct = total > 0 ? ((oovCount / total) * 100).toFixed(1) : 0;
+            const ttr = total > 0 ? (unique.length / total).toFixed(2) : 0;
+
+            document.getElementById('metric-invocab').textContent = inVocabCount;
+            document.getElementById('metric-coverage').textContent = `${coverage}% coverage`;
+            document.getElementById('metric-oov').textContent = oovCount;
+            document.getElementById('metric-oov-pct').textContent = `${oovPct}% unmapped`;
+            document.getElementById('metric-ttr').textContent = ttr;
+
+            // Context window & parameters
+            const windowSize = parseInt(document.getElementById('window-slider').value) || 2;
+            const attentionDrift = parseFloat(document.getElementById('drift-slider').value) || 0.45;
+
+            // Build Co-occurrence Matrix
+            coOccurrenceMatrix = {};
+            unique.forEach(u => coOccurrenceMatrix[u] = {});
+
+            for (let i = 0; i < total; i++) {
+                const t1 = currentTokens[i];
+                for (let offset = -windowSize; offset <= windowSize; offset++) {
+                    if (offset === 0) continue;
+                    const j = i + offset;
+                    if (j >= 0 && j < total) {
+                        const t2 = currentTokens[j];
+                        coOccurrenceMatrix[t1][t2] = (coOccurrenceMatrix[t1][t2] || 0) + 1;
+                    }
+                }
+            }
+
+            // Compute Static Coordinates (X, Y, Z)
+            const maxCount = Math.max(...Object.values(counts));
+            const maxLen = Math.max(...unique.map(w => w.length));
+
+            const staticCoords = {};
+            unique.forEach((token, idx) => {
+                const angle = (idx / unique.length) * Math.PI * 2;
+                const deg = Object.values(coOccurrenceMatrix[token] || {}).reduce((a, b) => a + b, 0);
+                const freqNorm = counts[token] / maxCount;
+                const lenNorm = token.length / maxLen;
+                const radius = 45 + 55 * (1 - Math.min(1, deg / 10));
+
+                const xs = Math.cos(angle) * radius + (freqNorm * 40 - 20);
+                const ys = Math.sin(angle) * radius + (deg * 4 - 20);
+                const zs = (lenNorm * 100 - 50) + (vocabularySet.has(token) ? 15 : -15);
+
+                staticCoords[token] = {
+                    x: Math.round(xs * 10) / 10,
+                    y: Math.round(ys * 10) / 10,
+                    z: Math.round(zs * 10) / 10
+                };
+            });
+
+            // Compute Contextual Coordinates (with attention shift)
+            const occurrences = [];
+            const contextualAgg = {};
+            unique.forEach(u => contextualAgg[u] = []);
+
+            for (let i = 0; i < total; i++) {
+                const token = currentTokens[i];
+                const base = staticCoords[token];
+
+                let shiftX = 0, shiftY = 0, shiftZ = 0;
+                let weightSum = 0;
+                let neighbors = [];
+
+                for (let offset = -windowSize; offset <= windowSize; offset++) {
+                    if (offset === 0) continue;
+                    const j = i + offset;
+                    if (j >= 0 && j < total) {
+                        const nToken = currentTokens[j];
+                        neighbors.push(nToken);
+                        const weight = 1.0 / Math.abs(offset);
+                        const nBase = staticCoords[nToken];
+                        shiftX += weight * (nBase.x - base.x);
+                        shiftY += weight * (nBase.y - base.y);
+                        shiftZ += weight * (nBase.z - base.z);
+                        weightSum += weight;
+                    }
+                }
+
+                if (weightSum > 0) {
+                    shiftX /= weightSum;
+                    shiftY /= weightSum;
+                    shiftZ /= weightSum;
+                }
+
+                // Positional harmonic flow
+                const phase = (i / Math.max(1, total)) * Math.PI * 2;
+                const posX = Math.sin(phase) * 15;
+                const posY = Math.cos(phase) * 15;
+                const posZ = (i / Math.max(1, total) - 0.5) * 50;
+
+                const ctxX = base.x + attentionDrift * shiftX + posX;
+                const ctxY = base.y + attentionDrift * shiftY + posY;
+                const ctxZ = base.z + attentionDrift * shiftZ + posZ;
+
+                const cPos = {
+                    x: Math.round(ctxX * 10) / 10,
+                    y: Math.round(ctxY * 10) / 10,
+                    z: Math.round(ctxZ * 10) / 10
+                };
+
+                occurrences.push({
+                    index: i,
+                    token: token,
+                    in_vocab: vocabularySet.has(token),
+                    neighbors: neighbors,
+                    static: base,
+                    contextual: cPos
+                });
+
+                contextualAgg[token].push(cPos);
+            }
+
+            // Aggregate token data list
+            tokenDataList = unique.map(token => {
+                const cList = contextualAgg[token];
+                const avgCtx = {
+                    x: Math.round((cList.reduce((s, c) => s + c.x, 0) / cList.length) * 10) / 10,
+                    y: Math.round((cList.reduce((s, c) => s + c.y, 0) / cList.length) * 10) / 10,
+                    z: Math.round((cList.reduce((s, c) => s + c.z, 0) / cList.length) * 10) / 10
+                };
+                const s = staticCoords[token];
+                const drift = Math.sqrt((avgCtx.x - s.x)**2 + (avgCtx.y - s.y)**2 + (avgCtx.z - s.z)**2).toFixed(1);
+
+                return {
+                    id: token,
+                    token: token,
+                    count: counts[token],
+                    frequency: counts[token] / total,
+                    in_vocab: vocabularySet.has(token),
+                    static: s,
+                    contextual: avgCtx,
+                    drift: drift,
+                    occurrences: occurrences.filter(o => o.token === token)
+                };
+            });
+
+            // Sort by frequency
+            tokenDataList.sort((a, b) => b.count - a.count);
+
+            renderTable();
+            build3DScene();
+
+            if (!selectedTokenId && tokenDataList.length > 0) {
+                selectToken(tokenDataList[0].id);
+            } else if (selectedTokenId) {
+                selectToken(selectedTokenId);
+            }
+        }
+
+        function clearVisualizer() {
+            tokenDataList = [];
+            renderTable();
+            nodeMeshes.forEach(obj => scene.remove(obj.mesh));
+            nodeMeshes.clear();
+            linkLines.forEach(l => scene.remove(l));
+            linkLines = [];
+            vectorArrows.forEach(a => scene.remove(a));
+            vectorArrows = [];
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('token-table-body');
+            const search = (document.getElementById('table-search')?.value || '').toLowerCase();
+            tbody.innerHTML = '';
+
+            const filtered = tokenDataList.filter(t => t.token.toLowerCase().includes(search));
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="py-4 text-center text-slate-500 font-sans">No matching tokens found.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach((item, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = `hover:bg-slate-800/40 transition-colors cursor-pointer ${selectedTokenId === item.id ? 'bg-cyan-950/30' : ''}`;
+                tr.onclick = () => selectToken(item.id);
+
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 text-slate-400 font-sans text-[11px]">${idx + 1}</td>
+                    <td class="py-2.5 px-3 font-bold text-white flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full ${item.in_vocab ? 'bg-emerald-400' : 'bg-rose-400'}"></span>
+                        ${item.token}
+                    </td>
+                    <td class="py-2.5 px-3 text-cyan-300">${item.count}</td>
+                    <td class="py-2.5 px-3 text-slate-300 font-sans">${(item.frequency * 100).toFixed(1)}%</td>
+                    <td class="py-2.5 px-3 font-sans">
+                        <span class="text-[10px] px-2 py-0.5 rounded-full ${item.in_vocab ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60' : 'bg-rose-950/80 text-rose-300 border border-rose-800/60'}">
+                            ${item.in_vocab ? 'IN-VOCAB' : 'OOV'}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-3 text-slate-400 text-[11px]">(${item.static.x}, ${item.static.y}, ${item.static.z})</td>
+                    <td class="py-2.5 px-3 text-purple-300 text-[11px]">(${item.contextual.x}, ${item.contextual.y}, ${item.contextual.z})</td>
+                    <td class="py-2.5 px-3 text-amber-300 font-bold text-[11px]">${item.drift}</td>
+                    <td class="py-2.5 px-3 text-right">
+                        <button onclick="selectToken('${item.id}'); document.getElementById('graph-section').scrollIntoView({behavior:'smooth'});" class="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-600 text-slate-300 hover:text-white text-[10px] transition-colors font-sans">
+                            <i class="fa-solid fa-crosshairs"></i> Focus
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ================== Three.js 3D Engine ==================
+        function init3D() {
+            const canvas = document.getElementById('webgl-canvas');
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width || canvas.parentElement.clientWidth;
+            const height = rect.height || 580;
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x080c14, 0.0016);
+
+            camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 2000);
+            camera.position.set(0, 80, 250);
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 1.0;
+            controls.maxDistance = 500;
+            controls.minDistance = 30;
+
+            // Lights
+            const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambient);
+
+            const dirLight = new THREE.DirectionalLight(0x38bdf8, 0.9);
+            dirLight.position.set(100, 150, 80);
+            scene.add(dirLight);
+
+            const purpleLight = new THREE.PointLight(0xa855f7, 1.3, 400);
+            purpleLight.position.set(-80, -60, -40);
+            scene.add(purpleLight);
+
+            // Coordinate Grid Floor
+            const grid = new THREE.GridHelper(300, 24, 0x1e293b, 0x0f172a);
+            grid.position.y = -70;
+            scene.add(grid);
+
+            window.addEventListener('resize', onResize);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('click', onCanvasClick);
+
+            animate();
+        }
+
+        function build3DScene() {
+            if (!scene) return;
+
+            // Clear old objects
+            nodeMeshes.forEach(obj => scene.remove(obj.mesh));
+            nodeMeshes.clear();
+            linkLines.forEach(l => scene.remove(l));
+            linkLines = [];
+            vectorArrows.forEach(a => scene.remove(a));
+            vectorArrows = [];
+
+            // 1. Build Nodes
+            tokenDataList.forEach(node => {
+                const radius = Math.max(3.0, Math.min(8.5, 2.5 + Math.sqrt(node.count) * 2.2));
+                const geom = new THREE.SphereGeometry(radius, 24, 24);
+
+                const color = node.in_vocab ? 0x10b981 : 0xf43f5e;
+                const mat = new THREE.MeshStandardMaterial({
+                    color: color,
+                    roughness: 0.35,
+                    metalness: 0.45,
+                    emissive: color,
+                    emissiveIntensity: 0.25
+                });
+
+                const mesh = new THREE.Mesh(geom, mat);
+                mesh.userData = node;
+
+                // Position based on current mode
+                const targetPos = (activeGraphMode === 'contextual') ? node.contextual : node.static;
+                mesh.position.set(targetPos.x, targetPos.y, targetPos.z);
+                scene.add(mesh);
+
+                // Add Sprite Label
+                const labelCanvas = document.createElement('canvas');
+                const ctx = labelCanvas.getContext('2d');
+                labelCanvas.width = 256;
+                labelCanvas.height = 64;
+                ctx.font = 'bold 24px -apple-system, sans-serif';
+                ctx.fillStyle = node.in_vocab ? '#a7f3d0' : '#fecdd3';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.token, 128, 42);
+
+                const texture = new THREE.CanvasTexture(labelCanvas);
+                const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.85 });
+                const sprite = new THREE.Sprite(spriteMat);
+                sprite.scale.set(22, 5.5, 1);
+                sprite.position.set(0, radius + 3.8, 0);
+                mesh.add(sprite);
+
+                nodeMeshes.set(node.id, {
+                    mesh: mesh,
+                    sprite: sprite,
+                    data: node,
+                    currentPos: { ...mesh.position },
+                    targetPos: { ...targetPos }
+                });
+            });
+
+            // 2. Build Co-occurrence Edges
+            const lineMat = new THREE.LineBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.2,
+                linewidth: 1
+            });
+
+            const seenPairs = new Set();
+            tokenDataList.forEach(node1 => {
+                const nbrs = coOccurrenceMatrix[node1.id] || {};
+                for (let nId in nbrs) {
+                    const pair = [node1.id, nId].sort().join("___");
+                    if (!seenPairs.has(pair) && nodeMeshes.has(nId)) {
+                        seenPairs.add(pair);
+                        const obj1 = nodeMeshes.get(node1.id);
+                        const obj2 = nodeMeshes.get(nId);
+                        const geom = new THREE.BufferGeometry().setFromPoints([
+                            obj1.mesh.position,
+                            obj2.mesh.position
+                        ]);
+                        const line = new THREE.Line(geom, lineMat);
+                        line.userData = { source: node1.id, target: nId };
+                        scene.add(line);
+                        linkLines.push(line);
+                    }
+                }
+            });
+
+            // 3. Build Vector Arrows (Static -> Contextual displacement)
+            tokenDataList.forEach(node => {
+                const s = node.static;
+                const c = node.contextual;
+                const from = new THREE.Vector3(s.x, s.y, s.z);
+                const to = new THREE.Vector3(c.x, c.y, c.z);
+                const dir = new THREE.Vector3().subVectors(to, from);
+                const length = dir.length();
+
+                if (length > 0.5) {
+                    dir.normalize();
+                    const arrow = new THREE.ArrowHelper(dir, from, length, 0xa855f7, 2.8, 1.8);
+                    arrow.visible = (activeGraphMode === 'dual');
+                    scene.add(arrow);
+                    vectorArrows.push(arrow);
+                }
+            });
+        }
+
+        function setGraphMode(mode) {
+            activeGraphMode = mode;
+            ['static', 'contextual', 'dual'].forEach(m => {
+                const btn = document.getElementById(`mode-btn-${m}`);
+                if (m === mode) {
+                    btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500 text-white shadow-md shadow-cyan-500/30 flex items-center gap-2 transition-all";
+                } else {
+                    btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-2 transition-all";
+                }
+            });
+
+            const modeLabels = {
+                static: 'Static Logic Active',
+                contextual: 'Contextual Logic Active',
+                dual: 'Shift Vector (Dual) Active'
+            };
+            document.getElementById('current-mode-label').textContent = modeLabels[mode];
+
+            nodeMeshes.forEach(obj => {
+                const target = (activeGraphMode === 'contextual') ? obj.data.contextual : obj.data.static;
+                obj.targetPos = target;
+            });
+
+            vectorArrows.forEach(arrow => {
+                arrow.visible = (activeGraphMode === 'dual');
+            });
+        }
+
+        function selectToken(tokenId) {
+            selectedTokenId = tokenId;
+            const node = tokenDataList.find(n => n.id === tokenId);
+            if (!node) return;
+
+            document.getElementById('inspect-word').textContent = node.token;
+            document.getElementById('inspect-occ').textContent = `${node.count} occurrences`;
+            document.getElementById('inspect-pct').textContent = `${(node.frequency * 100).toFixed(1)}%`;
+
+            const pill = document.getElementById('inspect-status-pill');
+            if (node.in_vocab) {
+                pill.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+                pill.textContent = "In-Vocabulary";
+            } else {
+                pill.className = "text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                pill.textContent = "Out-Of-Vocabulary (OOV)";
+            }
+
+            document.getElementById('inspect-static-pos').textContent = `(${node.static.x}, ${node.static.y}, ${node.static.z})`;
+            document.getElementById('inspect-context-pos').textContent = `(${node.contextual.x}, ${node.contextual.y}, ${node.contextual.z})`;
+            document.getElementById('inspect-drift-dist').textContent = `${node.drift} units`;
+
+            // Neighbors list
+            const neighborSet = new Set();
+            node.occurrences.forEach(occ => occ.neighbors.forEach(n => neighborSet.add(n)));
+
+            const nbrContainer = document.getElementById('inspect-neighbors-list');
+            nbrContainer.innerHTML = '';
+            if (neighborSet.size === 0) {
+                nbrContainer.innerHTML = '<span class="text-slate-500 italic text-[11px]">No adjacent words in context window</span>';
+            } else {
+                neighborSet.forEach(nbr => {
+                    const span = document.createElement('span');
+                    span.className = "px-2 py-0.5 rounded-lg bg-slate-800 text-cyan-300 border border-slate-700 font-mono text-[10px] cursor-pointer hover:bg-slate-700 transition-colors";
+                    span.textContent = nbr;
+                    span.onclick = () => selectToken(nbr);
+                    nbrContainer.appendChild(span);
+                });
+            }
+
+            // Highlight node mesh in 3D
+            nodeMeshes.forEach((obj, id) => {
+                if (id === tokenId) {
+                    obj.mesh.material.emissiveIntensity = 0.9;
+                    obj.mesh.scale.set(1.4, 1.4, 1.4);
+                } else {
+                    obj.mesh.material.emissiveIntensity = 0.25;
+                    obj.mesh.scale.set(1.0, 1.0, 1.0);
+                }
+            });
+
+            // Update table highlighting
+            const rows = document.querySelectorAll('#token-table-body tr');
+            rows.forEach(r => {
+                if (r.textContent.includes(node.token)) {
+                    r.classList.add('bg-cyan-950/30');
+                } else {
+                    r.classList.remove('bg-cyan-950/30');
+                }
+            });
+        }
+
+        function onMouseMove(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function onCanvasClick() {
+            raycaster.setFromCamera(mouse, camera);
+            const meshes = Array.from(nodeMeshes.values()).map(o => o.mesh);
+            const intersects = raycaster.intersectObjects(meshes);
+            if (intersects.length > 0) {
+                const targetNode = intersects[0].object.userData;
+                selectToken(targetNode.id);
+            }
+        }
+
+        function onResize() {
+            const canvas = document.getElementById('webgl-canvas');
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        function toggleAutoRotate(val) {
+            controls.autoRotate = val;
+        }
+
+        function toggleEdges(val) {
+            linkLines.forEach(l => l.visible = val);
+        }
+
+        function toggleLabels(val) {
+            nodeMeshes.forEach(obj => {
+                if (obj.sprite) obj.sprite.visible = val;
+            });
+        }
+
+        function applyNodeFilter(val) {
+            nodeMeshes.forEach((obj, id) => {
+                if (val === 'all') obj.mesh.visible = true;
+                else if (val === 'invocab') obj.mesh.visible = obj.data.in_vocab;
+                else if (val === 'oov') obj.mesh.visible = !obj.data.in_vocab;
+            });
+        }
+
+        function reset3DCamera() {
+            camera.position.set(0, 80, 250);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Interpolate node positions
+            nodeMeshes.forEach(obj => {
+                obj.mesh.position.lerp(
+                    new THREE.Vector3(obj.targetPos.x, obj.targetPos.y, obj.targetPos.z),
+                    0.08
+                );
+            });
+
+            // Update edge endpoints
+            linkLines.forEach(line => {
+                const sObj = nodeMeshes.get(line.userData.source);
+                const tObj = nodeMeshes.get(line.userData.target);
+                if (sObj && tObj) {
+                    const pos = line.geometry.attributes.position.array;
+                    pos[0] = sObj.mesh.position.x;
+                    pos[1] = sObj.mesh.position.y;
+                    pos[2] = sObj.mesh.position.z;
+                    pos[3] = tObj.mesh.position.x;
+                    pos[4] = tObj.mesh.position.y;
+                    pos[5] = tObj.mesh.position.z;
+                    line.geometry.attributes.position.needsUpdate = true;
+                }
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Initialize application on load
+        window.addEventListener('DOMContentLoaded', () => {
+            init3D();
+            loadSample(1);
+        });
+    </script>
+</body>
+</html>
